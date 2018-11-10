@@ -23,12 +23,12 @@ public class MainAutonomous extends BaseAutonomous
             right.setPower((double)i / 100);
             Thread.sleep(10);
         }
-        Thread.sleep(250);
-        left.setPower(0);
-        right.setPower(0);
+        Thread.sleep(350);
+        left.setPower(0.5);
+        right.setPower(-0.5);
         mc.hold(700);
-        Thread.sleep(3000);
-        for (int i = 0; i < 50; i++)
+        Thread.sleep(250);
+        for (int i = 50; i >= 0; i--)
         {
             left.setPower((double)i / 100);
             right.setPower(-(double)i / 100);
