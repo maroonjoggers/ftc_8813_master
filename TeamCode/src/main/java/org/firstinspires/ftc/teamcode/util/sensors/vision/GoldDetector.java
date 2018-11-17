@@ -129,7 +129,7 @@ public class GoldDetector implements CameraStream.CameraListener, CameraStream.O
             Imgproc.cvtColor(image, hsv, Imgproc.COLOR_BGR2HSV);
 
             Mat mask = new Mat();
-            Core.inRange(hsv, new Scalar(10, 120, 40), new Scalar(33, 255, 255), mask);
+            Core.inRange(hsv, new Scalar(15, 120, 40), new Scalar(33, 255, 255), mask);
 
             List<MatOfPoint> contours = new ArrayList<>();
             Mat unused = new Mat();

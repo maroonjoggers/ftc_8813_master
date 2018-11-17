@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import org.firstinspires.ftc.teamcode.autonomous.util.MotorController;
 import org.firstinspires.ftc.teamcode.util.Config;
 
-@Autonomous(name="Autonomous")
-public class MainAutonomous extends BaseAutonomous
+@Autonomous(name="Drop Crater Autonomous")
+public class DropCraterAuto extends BaseAutonomous
 {
     @Override
     public void run() throws InterruptedException
@@ -15,38 +15,21 @@ public class MainAutonomous extends BaseAutonomous
         DcMotor left = hardwareMap.dcMotor.get("left");
         DcMotor right = hardwareMap.dcMotor.get("right");
         DcMotor lifter = hardwareMap.dcMotor.get("lifter");
-        /*
+
         lifter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         lifter.setPower(-1);
-        Thread.sleep(50);
+        Thread.sleep(1000);
         lifter.setPower(0);
         Thread.sleep(1000);
-
-        */
-
-        // Forward
-        left.setPower(-0.75);
-        right.setPower(0.75);
-
-        Thread.sleep(1000);
-
-        //Backward
-        left.setPower(0.5);
-        right.setPower(-0.5);
-
+        lifter.setPower(-1);
         Thread.sleep(500);
-
-        // Turn
-        left.setPower(-0.6);
-        right.setPower(-0.6);
-
-        Thread.sleep(400);
+        lifter.setPower(0);
 
         // Forward
-        left.setPower(-0.75);
-        right.setPower(0.75);
+        left.setPower(-0.9);
+        right.setPower(0.9);
 
-        Thread.sleep(3000);
+        Thread.sleep(2000);
 
         // STOP
         left.setPower(0);
