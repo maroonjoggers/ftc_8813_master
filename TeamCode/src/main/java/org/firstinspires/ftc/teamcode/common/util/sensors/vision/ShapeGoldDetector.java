@@ -23,6 +23,7 @@ public class ShapeGoldDetector implements CameraStream.CameraListener, CameraStr
     private Point lastGoldCenter;
     private boolean seen = false;
     private Thread workerThread;
+    private static final Object lock = new Object();
 
     public ShapeGoldDetector()
     {
@@ -50,62 +51,64 @@ public class ShapeGoldDetector implements CameraStream.CameraListener, CameraStr
     @Override
     public Mat draw(Mat bgr)
     {
-        OverlayData data = worker.overlayData.clone();
-        if (data.contours != null)
+        synchronized (lock)
         {
-            int i = 0;
-            for (MatOfPoint contour : new ArrayList<>(data.contours))
+            OverlayData data = worker.overlayData.clone();
+            if (data.contours != null)
             {
-                if (contour == null) continue;
-                MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
-                double perim = Imgproc.arcLength(contour2f, true);
-                int edgeCount = contour.height();
-                boolean convex = Imgproc.isContourConvex(contour);
+                int i = 0;
+                for (MatOfPoint contour : new ArrayList<>(data.contours))
+                {
+                    if (contour == null) continue;
+                    MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
+                    double perim = Imgproc.arcLength(contour2f, true);
+                    int edgeCount = contour.height();
+                    boolean convex = Imgproc.isContourConvex(contour);
 
-                Scalar color = new Scalar(0, 127, 0);
-                int thickness = 2;
+                    Scalar color = new Scalar(0, 127, 0);
+                    int thickness = 2;
 
-                if (perim < 100)
-                {
-                    thickness = 1;
-                }
-                if (edgeCount < 4 || edgeCount > 6)
-                {
-                    color = new Scalar(0, 0, 127);
-                }
-                if (i == data.contours.size()-1)
-                {
-                    color = new Scalar(127, color.val[1], color.val[2]);
-                }
-                if (convex)
-                {
-                    color = new Scalar(color.val[0]*2, color.val[1]*2, color.val[2]*2);
-                }
-                Imgproc.polylines(bgr, Arrays.asList(contour), true, color, thickness);
+                    if (perim < 100)
+                    {
+                        thickness = 1;
+                    }
+                    if (edgeCount < 4 || edgeCount > 6)
+                    {
+                        color = new Scalar(0, 0, 127);
+                    }
+                    if (i == data.contours.size() - 1)
+                    {
+                        color = new Scalar(127, color.val[1], color.val[2]);
+                    }
+                    if (convex)
+                    {
+                        color = new Scalar(color.val[0] * 2, color.val[1] * 2, color.val[2] * 2);
+                    }
+                    Imgproc.polylines(bgr, Arrays.asList(contour), true, color, thickness);
 
-                contour2f.release();
-                i++;
+                    contour2f.release();
+                    i++;
+                }
             }
-        }
-        if (data.goldRect != null)
-        {
-            Rect r = data.goldRect;
-            Imgproc.rectangle(bgr, new Point(r.x, r.y), new Point(r.x + r.width, r.y + r.height), new Scalar(255, 255, 0), 2);
-        }
-        if (data.goldCenters != null)
-        {
-            for (int i = 0; i < data.goldCenters.size(); i++)
+            if (data.goldRect != null)
             {
-                Imgproc.circle(bgr, data.goldCenters.get(i), 5, new Scalar(0, 0, 255));
+                Rect r = data.goldRect;
+                Imgproc.rectangle(bgr, new Point(r.x, r.y), new Point(r.x + r.width, r.y + r.height), new Scalar(255, 255, 0), 2);
             }
-            if (data.goldCenters.size() > 0)
+            if (data.goldCenters != null)
             {
-                lastGoldCenter = data.goldCenters.get(data.goldCenters.size()-1);
-                seen = true;
-            }
-            else
-            {
-                seen = false;
+                for (int i = 0; i < data.goldCenters.size(); i++)
+                {
+                    Imgproc.circle(bgr, data.goldCenters.get(i), 5, new Scalar(0, 0, 255));
+                }
+                if (data.goldCenters.size() > 0)
+                {
+                    lastGoldCenter = data.goldCenters.get(data.goldCenters.size() - 1);
+                    seen = true;
+                } else
+                {
+                    seen = false;
+                }
             }
         }
         return bgr;
@@ -172,6 +175,7 @@ public class ShapeGoldDetector implements CameraStream.CameraListener, CameraStr
             Mat unused = new Mat();
             Imgproc.findContours(mask, contours, unused, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
             unused.release();
+            OverlayData overlayData = new OverlayData();
 
             overlayData.goldCenters = new ArrayList<>();
             overlayData.contours = new ArrayList<>();
@@ -208,6 +212,10 @@ public class ShapeGoldDetector implements CameraStream.CameraListener, CameraStr
                 overlayData.goldRect = Imgproc.boundingRect(bestContour);
                 overlayData.contours.add(bestContour);
                 overlayData.goldCenters.add(center);
+            }
+            synchronized (lock)
+            {
+                this.overlayData = overlayData;
             }
             mask.release();
             image.release();
