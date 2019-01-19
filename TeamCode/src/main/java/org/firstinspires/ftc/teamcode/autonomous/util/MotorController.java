@@ -4,9 +4,10 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.teamcode.autonomous.BaseAutonomous;
-import org.firstinspires.ftc.teamcode.util.Config;
-import org.firstinspires.ftc.teamcode.util.Logger;
-import org.firstinspires.ftc.teamcode.util.Utils;
+import org.firstinspires.ftc.teamcode.common.util.Config;
+import org.firstinspires.ftc.teamcode.common.util.Logger;
+import org.firstinspires.ftc.teamcode.common.util.PIDController;
+import org.firstinspires.ftc.teamcode.common.util.Utils;
 
 import java.io.Closeable;
 
@@ -24,15 +25,13 @@ public class MotorController implements Closeable
         
         protected volatile double power = 1;
         protected Logger log;
-        protected volatile int target;
         protected volatile boolean holding = false;
         protected volatile boolean stopNearTarget = false;
-        protected volatile double kP, kI, kD;
+        protected volatile boolean holdStalled = true;
         protected DcMotor motor;
-        protected double integral;
-        protected double prev_error;
         protected Runnable atTarget;
         private boolean stopping;
+        protected PIDController controller;
         
         private long stall_begin;
         
@@ -48,12 +47,9 @@ public class MotorController implements Closeable
             if (!noReset)
             {
                 motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-                motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             }
-            target = 0;
-            kP = 0;
-            kI = 0;
-            kD = 0;
+            controller = new PIDController(0, 0, 0);
         }
         
         @Override
@@ -65,10 +61,9 @@ public class MotorController implements Closeable
                 if (holding)
                 {
                     stopping = false;
-                    double error = target - getCurrentPosition(); //target > pos : error positive
-                    integral += error;
-                    double derivative = error - prev_error;
-                    if (derivative == 0)
+                    if (!holdStalled && controller.getDerivative() == 0
+                            && Math.abs(controller.getError()) > sse
+                            && Math.abs(motor.getPower()) > 0.6)
                     {
                         if (stall_begin == 0)
                         {
@@ -82,17 +77,16 @@ public class MotorController implements Closeable
                     {
                         stall_begin = 0;
                     }
-                    prev_error = error;
-                    double speed = error * kP + integral * (kI) + derivative * kD;
+
+                    double speed = controller.process(getCurrentPosition());
                     speed = Utils.constrain(speed, -1, 1) * power;
-                    if (Math.abs(error) < sse)
+                    if (Math.abs(controller.getError()) < sse)
                     {
-                        if (stopNearTarget && derivative < 2)
+                        if (stopNearTarget && Math.abs(controller.getDerivative()) < 2)
                         {
                             stopHolding();
                             stopNearTarget = false;
                         }
-                        integral -= error;
                         speed = 0;
                         if (atTarget != null) atTarget.run();
                     }
@@ -103,13 +97,13 @@ public class MotorController implements Closeable
                     {
                         stopping = true;
                         motor.setPower(0);
-                        integral = 0;
+                        controller.resetIntegrator();
                     }
                 }
                 if (Thread.interrupted())
                 {
                     motor.setPower(0);
-                    integral = 0;
+                    controller.resetIntegrator();
                     return;
                 }
             }
@@ -117,13 +111,13 @@ public class MotorController implements Closeable
         
         void setTarget(int target)
         {
-            this.target = target;
+            controller.setTarget(target);
             log.d("Position set to %d", target);
         }
         
         int getTarget()
         {
-            return target;
+            return (int)controller.getTarget();
         }
         
         void hold()
@@ -155,20 +149,18 @@ public class MotorController implements Closeable
         
         boolean nearTarget(int error)
         {
-            return Math.abs(target - getCurrentPosition()) <= error;
+            return Math.abs(controller.getError()) <= error;
         }
         
         double[] getPIDConstants()
         {
-            return new double[]{kP, kI, kD};
+            return controller.getPIDConstants();
         }
         
         void setPIDConstants(double kP, double kI, double kD)
         {
             log.i("Updated PID constants to kP = %.4f, kI = %.4f, kD = %.4f", kP, kI, kD);
-            this.kP = kP;
-            this.kI = kI;
-            this.kD = kD;
+            controller.setPIDConstants(kP, kI, kD);
         }
         
         void setPIDConstants(double[] constants)
@@ -179,6 +171,11 @@ public class MotorController implements Closeable
         void setReverse(boolean reverse)
         {
             motor.setDirection(reverse ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
+        }
+
+        PIDController getInternalController()
+        {
+            return controller;
         }
     }
     
@@ -435,7 +432,23 @@ public class MotorController implements Closeable
         if (closed) throw new IllegalStateException("Motor controller closed");
         return controller.isHolding();
     }
-    
+
+
+    public PIDController getInternalController()
+    {
+        if (closed) throw new IllegalStateException("Motor controller closed");
+        return controller.getInternalController();
+    }
+
+    public double getOutput()
+    {
+        return controller.motor.getPower();
+    }
+
+    public void holdStalled(boolean hold)
+    {
+        controller.holdStalled = hold;
+    }
     /**
      * Close the motor controller. Attempting to access any of the methods (except
      * {@link #closed()}) after the controller has been closed will throw an IllegalStateException.

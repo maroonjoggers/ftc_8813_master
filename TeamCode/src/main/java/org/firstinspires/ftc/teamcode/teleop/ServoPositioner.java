@@ -1,15 +1,14 @@
 package org.firstinspires.ftc.teamcode.teleop;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.autonomous.util.telemetry.TelemetryWrapper;
 import org.firstinspires.ftc.teamcode.teleop.util.ButtonHelper;
-import org.firstinspires.ftc.teamcode.util.Config;
-import org.firstinspires.ftc.teamcode.util.Logger;
-import org.firstinspires.ftc.teamcode.util.Utils;
+import org.firstinspires.ftc.teamcode.common.util.Config;
+import org.firstinspires.ftc.teamcode.common.util.Logger;
+import org.firstinspires.ftc.teamcode.common.util.Utils;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +23,6 @@ import static org.firstinspires.ftc.teamcode.teleop.util.ButtonHelper.dpad_up;
  * ServoPositioner - Tool to move specific servos individually to collect positions
  */
 
-@Disabled // For now
 @TeleOp(name = "Servo Positioner")
 public class ServoPositioner extends OpMode
 {
@@ -129,6 +127,7 @@ public class ServoPositioner extends OpMode
     {
         for (int i = 0; i < VISIBLE_LINES; i++)
         {
+            if (scroll + i >= servos.length) break;
             String s = servos[scroll + i];
             if (scroll + i == chosen)
             {

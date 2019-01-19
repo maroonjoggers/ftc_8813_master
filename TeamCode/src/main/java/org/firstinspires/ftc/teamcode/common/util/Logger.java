@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.util;
+package org.firstinspires.ftc.teamcode.common.util;
 
 import java.io.File;
 import java.io.IOException;
@@ -91,7 +91,7 @@ public class Logger
         this.tag = tag;
     }
     
-    public void log(int level, String fmt, Object... args)
+    public synchronized void log(int level, String fmt, Object... args)
     {
         if (writer == null)
         {

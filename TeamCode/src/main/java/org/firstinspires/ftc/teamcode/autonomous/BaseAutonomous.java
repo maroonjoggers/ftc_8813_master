@@ -4,20 +4,18 @@ package org.firstinspires.ftc.teamcode.autonomous;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
-import org.firstinspires.ftc.teamcode.autonomous.tasks.Task;
 import org.firstinspires.ftc.teamcode.autonomous.util.opencv.CameraStream;
 import org.firstinspires.ftc.teamcode.autonomous.util.telemetry.TelemetryWrapper;
-import org.firstinspires.ftc.teamcode.util.Config;
-import org.firstinspires.ftc.teamcode.util.Logger;
-import org.firstinspires.ftc.teamcode.util.Persistent;
+import org.firstinspires.ftc.teamcode.common.Robot;
+import org.firstinspires.ftc.teamcode.common.util.Config;
+import org.firstinspires.ftc.teamcode.common.util.Logger;
+import org.firstinspires.ftc.teamcode.common.util.Persistent;
 import org.opencv.android.OpenCVLoader;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -65,9 +63,7 @@ public abstract class BaseAutonomous extends LinearOpMode
             System.exit(0);
         }
     }
-    
-    //Queue of tasks to run
-    protected final List<Task> tasks = new ArrayList<>();
+
     //We're making BaseAutonomous a 'singleton' class. This means that there is always only ONE
     //instance in use at a time. This is stored in this static field, which can be retrieved by
     //other code without having to pass an instance to all of the methods that want to use it.
@@ -88,7 +84,7 @@ public abstract class BaseAutonomous extends LinearOpMode
         return instance;
     }
     
-    public static final boolean instantated()
+    public static final boolean instantiated()
     {
         return instance != null;
     }
@@ -99,7 +95,35 @@ public abstract class BaseAutonomous extends LinearOpMode
             stream = new CameraStream();
         return stream;
     }
-    
+
+    // Apparently, the LinearOpMode does not interrupt the current thread when it stops! This thread
+    // watches the running status of the OpMode and interrupts it when a stop is requested.
+    private class Interrupter implements Runnable
+    {
+        private Thread toInterrupt;
+
+        Interrupter(Thread toInterrupt)
+        {
+            this.toInterrupt = toInterrupt;
+        }
+
+        @Override
+        public void run()
+        {
+            while (!isStopRequested())
+            {
+                try
+                {
+                    Thread.sleep(10);
+                }
+                catch (InterruptedException e)
+                {
+                    break;
+                }
+            }
+            toInterrupt.interrupt();
+        }
+    }
     
     /**
      * Run the op mode.
@@ -127,10 +151,6 @@ public abstract class BaseAutonomous extends LinearOpMode
             //Initialize the configuration file
             config = new Config(Config.configFile);
             
-            //Clear the task list in case the robot was stopped before the list was empty
-            //and the OpMode wasn't re-initialized.
-            tasks.clear();
-            
             //Clear the persistent objects since this would be a new round in competition
             Persistent.clear();
             
@@ -138,30 +158,35 @@ public abstract class BaseAutonomous extends LinearOpMode
             
             //Set the current instance
             instance = this;
-            
+
+            Robot.initialize(hardwareMap, config);
             initialize();
             
             //Must wait for start, otherwise the robot will run as soon as it is initialized, which can
             //be incredibly annoying. We could also simply override start(), but we also want to
             //initialize stuff, so it makes it simpler to use one method.
             waitForStart();
+
+            // Start the interrupter thread
+            Thread interrupterThread = new Thread(new Interrupter(Thread.currentThread()), "BaseAutonomous interrupter");
+            interrupterThread.setDaemon(true);
+            interrupterThread.start();
+
             if (!opModeIsActive()) return;
             Logger.startTimer();
-            //Run the tasks
+            // Run the robot code
             run();
-            //Run any leftover tasks
-            runTasks();
-            log.i("Finished all tasks");
-            while (opModeIsActive())
-            {
-                Thread.sleep(100);
-            }
-        } catch (InterruptedException | RuntimeException | IOException | Error e)
+            log.i("Finished main robot thread; waiting for OpMode to finish");
+            interrupterThread.join();
+        }
+        catch (InterruptedException | RuntimeException | IOException | Error e)
         {
             exc = e;
-        } finally
+        }
+        finally
         {
             finish();
+            Robot.instance().uninitialize();
             instance = null;
             if (stream != null)
             {
@@ -210,22 +235,22 @@ public abstract class BaseAutonomous extends LinearOpMode
     {
     }
     
-    /**
-     * Use this method to run all of the tasks currently in the list. This is executed after run()
-     * so that any tasks left in the queue are run. If you don't want this behavior, you should
-     * clear the task list at the end of the method. This method will remove all of the tasks from
-     * the list. Run this before any decisions about the state of the robot between tasks are made,
-     * since nothing actually happens when the tasks are added to the list.
-     *
-     * @throws InterruptedException if the OpMode is trying to stop
-     */
-    public final void runTasks() throws InterruptedException
-    {
-        while (!tasks.isEmpty())
-        {
-            //Possibly add telemetry showing which task is running?
-            Task t = tasks.remove(0);
-            t.runTask();
-        }
-    }
+//    /**
+//     * Use this method to run all of the tasks currently in the list. This is executed after run()
+//     * so that any tasks left in the queue are run. If you don't want this behavior, you should
+//     * clear the task list at the end of the method. This method will remove all of the tasks from
+//     * the list. Run this before any decisions about the state of the robot between tasks are made,
+//     * since nothing actually happens when the tasks are added to the list.
+//     *
+//     * @throws InterruptedException if the OpMode is trying to stop
+//     */
+//    public final void runTasks() throws InterruptedException
+//    {
+//        while (!tasks.isEmpty())
+//        {
+//            //Possibly add telemetry showing which task is running?
+//            Task t = tasks.remove(0);
+//            t.runTask();
+//        }
+//    }
 }
