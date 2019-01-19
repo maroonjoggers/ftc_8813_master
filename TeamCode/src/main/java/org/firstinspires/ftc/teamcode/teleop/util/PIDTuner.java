@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.autonomous.util.MotorController;
 import org.firstinspires.ftc.teamcode.common.util.Config;
+import org.firstinspires.ftc.teamcode.common.util.DataLogger;
 import org.firstinspires.ftc.teamcode.common.util.Logger;
 import org.firstinspires.ftc.teamcode.common.util.Utils;
 
@@ -29,7 +30,8 @@ public class PIDTuner extends OpMode
     private int changing = 0;
     private long start;
 
-    private DataOutputStream logger;
+    private DataLogger dataLogger;
+    private Logger log;
     
     @Override
     public void init() {
@@ -38,49 +40,38 @@ public class PIDTuner extends OpMode
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        log = new Logger("PID Tuner");
         controller = new MotorController(hardwareMap.dcMotor.get("intake pivot"), new Config(Config.configFile));
         buttons = new ButtonHelper(gamepad1);
-        //controller.setPIDConstants(0, 0, 0);
+        controller.setPIDConstants(0, 0, 0);
         controller.setPower(0.5);
         controller.holdStalled(true);
         controller.hold(0);
 
-        File log = new File(Config.storageDir + "pidLog.txt");
         try
         {
-            logger = new DataOutputStream(new FileOutputStream(log));
-        } catch (FileNotFoundException e)
+            dataLogger = new DataLogger(new File(Config.storageDir + "pidLog.dat"),
+                    new DataLogger.Channel("kP",       0xAA0000),
+                    new DataLogger.Channel("kI",       0x00AA00),
+                    new DataLogger.Channel("kD",       0x0000AA),
+                    new DataLogger.Channel("target",   0xFFFF00),
+                    new DataLogger.Channel("position", 0x00FF00),
+                    new DataLogger.Channel("error",    0xFF0000),
+                    new DataLogger.Channel("integral", 0x7F00FF),
+                    new DataLogger.Channel("deriv",    0x00FFFF),
+                    new DataLogger.Channel("output",   0xFFFFFF));
+
+        } catch (IOException e)
         {
-            logger = null;
-        }
-        if (logger != null)
-        {
-            final String[] names = {"kP",      "kI",    "kD",    "target", "position", "error", "integral", "deriv", "output"};
-            final int[] colors = {0x7F0000, 0x007F00, 0x00007F,  0xFFFF00,  0x00FF00, 0xFF0000, 0x7F00FF,  0x00FFFF, 0xFFFFFF};
-            try
-            {
-                logger.write("LOGp".getBytes(Charset.forName("UTF-8")));
-                logger.writeInt(names.length);
-                for (int i = 0; i < names.length; i++)
-                {
-                    logger.writeInt(colors[i]);
-                    logger.write(names[i].getBytes(Charset.forName("UTF-8")));
-                    logger.write(0x00); // Null termination
-                }
-            } catch (IOException e)
-            {
-                try
-                {
-                    logger.close();
-                }
-                catch (IOException e1) {}
-                finally
-                {
-                    logger = null;
-                }
-            }
+            throw new RuntimeException(e);
         }
     }
+//    log(new double[]{kP, kI, kD,
+//            controller.getTargetPosition(), controller.getCurrentPosition(),
+//            controller.getInternalController().getError(),
+//            controller.getInternalController().getIntegral(),
+//            controller.getInternalController().getDerivative(),
+//            controller.getOutput()}, start);
     
     @Override
     public void loop() {
@@ -131,54 +122,48 @@ public class PIDTuner extends OpMode
         telemetry.addData("kD", constants[2]);
         if (gamepad1.left_bumper)
         {
-            if (buttons.pressing(ButtonHelper.left_bumper))
-            {
-                try
-                {
-                    logger.writeDouble(Double.NaN);
-                } catch (IOException e)
-                {
-                    telemetry.addData("Log error", e.getMessage());
-                }
-                start = System.nanoTime();
-            }
             telemetry.addData("Logging", "");
-            log(new double[]{constants[0], constants[1], constants[2],
-                    controller.getTargetPosition(), controller.getCurrentPosition(),
-                    controller.getInternalController().getError(),
-                    controller.getInternalController().getIntegral(),
-                    controller.getInternalController().getDerivative(),
-                    controller.getOutput()}, start);
+        }
+        else
+        {
+            dataLogger.stopLogging();
+        }
+        if (buttons.pressing(ButtonHelper.left_bumper))
+        {
+            dataLogger.startLogging(new DataLogger.LogCallback()
+            {
+                @Override
+                public void putData(double[] array)
+                {
+                    double[] constants = controller.getPIDConstants();
+                    array[0] = constants[0];
+                    array[1] = constants[1];
+                    array[2] = constants[2];
+                    array[3] = controller.getTargetPosition();
+                    array[4] = controller.getCurrentPosition();
+                    array[5] = controller.getInternalController().getError();
+                    array[6] = controller.getInternalController().getIntegral();
+                    array[7] = controller.getInternalController().getDerivative();
+                    array[8] = controller.getOutput();
+                }
+            });
         }
     }
 
     // kP kI kD target position error integral deriv output
-    private void log(double[] data, long start)
-    {
-        try
-        {
-            if (logger == null) return;
-            logger.writeLong(System.nanoTime() - start);
-            for (double d : data)
-            {
-                logger.writeDouble(d);
-            }
-        }
-        catch (IOException e)
-        {
-            telemetry.addData("Logging error", e.getMessage());
-        }
-    }
+
     
     @Override
     public void stop() {
+
         try
         {
-            logger.close();
+            dataLogger.close();
         } catch (IOException e)
         {
-            e.printStackTrace();
+            log.e(e);
         }
+        // Allow the interrupt to be interpreted
         controller.close();
         Logger.close();
     }
