@@ -1,3 +1,3 @@
-include ':FtcRobotController', ':opencv-sdk'
+include ':FtcRobotController', ':opencv-sdk', ':libuvccamera', ':usbCameraCommon'
 include ':TeamCode'
 project(':opencv-sdk').projectDir = new File('OpenCV-android-sdk/sdk')
