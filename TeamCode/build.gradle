@@ -42,4 +42,6 @@ allprojects {
 
 dependencies {
     implementation project(':opencv-sdk')
+    implementation project(':libuvccamera')
+    implementation project(':usbCameraCommon')
 }
